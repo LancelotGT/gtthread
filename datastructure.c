@@ -1,10 +1,10 @@
-//
-//  datastructure.c
-//  gtthread
-//
-//  Created by Ning Wang on 9/8/15.
-//  Copyright (c) 2015 Ning Wang. All rights reserved.
-//
+/*
+ *  datastructure.c
+ *  gtthread
+ *
+ *  Created by Ning Wang on 9/8/15.
+ *  Copyright (c) 2015 Ning Wang. All rights reserved.
+ */
 
 #include "datastructure.h"
 #include <stdio.h>

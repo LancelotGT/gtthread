@@ -1,10 +1,9 @@
-//
-//  gtthread.c
-//  gtthread
-//
-//  Created by Ning Wang on 9/8/15.
-//  Copyright (c) 2015 Ning Wang. All rights reserved.
-//
+/*
+ * gtthread.c
+ * gtthread
+ * Created by Ning Wang on 9/8/15.
+ * Copyright (c) 2015 Ning Wang. All rights reserved.
+ */
 
 #include "gtthread.h"
 #include <stdio.h>
@@ -12,9 +11,9 @@
 #include <sys/time.h>
 #include <unistd.h>
 
-#define UNDEF 0 // undefined
-#define EX 0 // the thread is executed
-#define ST 1 // the thread is stopped
+#define UNDEF 0 /* undefined */
+#define EX 0 /* the thread is executed */
+#define ST 1 /* the thread is stopped */
 
 typedef void handler_t(int);
 
@@ -52,8 +51,10 @@ int gtthread_create(gtthread_t *thread,
                     void *(*start_routine)(void *),
                     void *arg)
 {
+    ucontext_t* ucp;
+    int state = ST;  
+    ucp = (ucontext_t*) malloc(sizeof(ucontext_t)); 
     thread->tid = maxtid++;
-    ucontext_t* ucp = (ucontext_t*) malloc(sizeof(ucontext_t));
     if (getcontext(ucp))
     {
         // enter here from setcontext
@@ -61,7 +62,6 @@ int gtthread_create(gtthread_t *thread,
     makecontext(ucp, start_routine, 1, arg);
     
     enqueue(ready_queue, thread);
-    int state = ST;
     return 0;
 }
 
