@@ -33,9 +33,10 @@ typedef struct GTThread_t
 
 /* global data section */
 static int maxtid;
-static queue_t ready_queue;
+static steque_t ready_queue;
 static gtthread_t* current;
 static struct itimerval timer;
+static sigset_t vtalrm;
 
 /* private functions prototypes */
 handler_t *Signal(int signum, handler_t *handler);
@@ -59,24 +60,14 @@ void preemptive_scheduler();
   for pthread_create.
  */
 void gtthread_init(long period){
-   // /* block the alarm signal */
-   // sigset_t mask_one;
-   // sigemptyset(&mask_one);
-   // sigaddset(&mask_one, SIGVTALRM);
-   // sigprocmask(SIG_BLOCK, &mask_one, NULL);
+
+    struct sigaction act;
 
     /* initializing data structures */
     maxtid = 0;
     ready_queue.front = thread_null;
     ready_queue.back = thread_null;
     
-    /* set alarm signal and signal handler */
-    timer.it_interval.tv_usec = 0;
-    timer.it_interval.tv_sec = 0; 
-    timer.it_value.tv_usec = period;
-    timer.it_value.tv_usec = 0; 
-    setitimer(ITIMER_VIRTUAL, &timer, NULL);
-
     /* create main thread and add it to ready queue */  
     gtthread_t* main_thread = (gtthread_t*) malloc(sizeof(gtthread_t));
     main_thread->tid = maxtid++;
@@ -87,9 +78,26 @@ void gtthread_init(long period){
     current = main_thread;
     enqueue(&ready_queue, thread); 
     
-    /* unblock the signal */
-    //sigprocmask(sig_unblock, &mask_one, null);
-    Signal(SIGVTALRM, sigvtalrm_handler); /* install signal handler for SIGVTALRM */ 
+    /* setting uo the signal mask */
+    sigemptyset(&vtalrm);
+    sigaddset(&vtalrm, SIGVTALRM);
+    sigprocmask(SIG_UNBLOCK, &vtalrm, NULL); /* in case this is blocked previously */
+
+    /* set alarm signal and signal handler */
+    timer.it_interval.tv_usec = 0;
+    timer.it_interval.tv_sec = 0; 
+    timer.it_value.tv_usec = period;
+    timer.it_value.tv_usec = 0; 
+    setitimer(ITIMER_VIRTUAL, &timer, NULL);
+ 
+    /* install signal handler for SIGVTALRM */  
+    memset(&act, '\0', sizeof(act));
+    act.sa_handler = &alrm_handler;
+    if (sigaction(SIGVTALRM, &act, NULL) < 0)
+    {
+      perror ("sigaction");
+      return 1;
+    }
 }
 
 

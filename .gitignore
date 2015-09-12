@@ -1,0 +1,4 @@
+*.o
+.DS_Store
+dining/dining_main
+src/gtthread_main
