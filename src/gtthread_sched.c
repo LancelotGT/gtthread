@@ -8,40 +8,39 @@ gtthreads library.  A simple round-robin queue should be used.
   Include as needed
 */
 
-#include "gtthread.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/time.h>
 #include <unistd.h>
- 
+#include <ucontext.h>
+#include "gtthread.h"
+#include "steque.h"
+
 #define GTTHREAD_RUNNING 0 /* the thread is running */
 #define GTTHREAD_CANCEL 1 /* the thread is cancelled */
 #define GTTHREAD_DONE 2 /* the thread has done */
 #define GTTHREAD_WAITING 3 /* the thread is on the ready queue */
 
 #define thread_null (gtthread_t*) NULL 
-typedef void handler_t(int);
 
 /* definition of gtthread */
 typedef struct GTThread_t
 {
-    struct GTThread_t* next;
     int tid;
     ucontext_t* context;
     int state;
 } gtthread_t; 
 
 /* global data section */
-static int maxtid;
 static steque_t ready_queue;
 static gtthread_t* current;
 static struct itimerval timer;
 static sigset_t vtalrm;
+static int maxtid; 
 
 /* private functions prototypes */
-handler_t *Signal(int signum, handler_t *handler);
 void sigvtalrm_handler(int sig);
-void preemptive_scheduler();
+void gtthread_start(void* (*start_routine)(void*), void* args);
 
 /*
   The gtthread_init() function does not have a corresponding pthread equivalent.
@@ -65,18 +64,23 @@ void gtthread_init(long period){
 
     /* initializing data structures */
     maxtid = 0;
-    ready_queue.front = thread_null;
-    ready_queue.back = thread_null;
+    steque_init(&ready_queue);
     
     /* create main thread and add it to ready queue */  
     gtthread_t* main_thread = (gtthread_t*) malloc(sizeof(gtthread_t));
     main_thread->tid = maxtid++;
     ucontext_t* ucp;
     ucp = (ucontext_t*) malloc(sizeof(ucontext_t)); 
-    getcontext(ucp);
+
+    /* must be called before makecontext */
+    if (getcontext(ucp) == -1)
+    {
+      perror("getcontext");
+      exit(EXIT_FAILURE);
+    }
 
     current = main_thread;
-    enqueue(&ready_queue, thread); 
+    steque_enqueue(&ready_queue, main_thread); 
     
     /* setting uo the signal mask */
     sigemptyset(&vtalrm);
@@ -92,7 +96,7 @@ void gtthread_init(long period){
  
     /* install signal handler for SIGVTALRM */  
     memset(&act, '\0', sizeof(act));
-    act.sa_handler = &alrm_handler;
+    act.sa_handler = &sigvtalrm_handler;
     if (sigaction(SIGVTALRM, &act, NULL) < 0)
     {
       perror ("sigaction");
@@ -109,10 +113,7 @@ int gtthread_create(gtthread_t *thread,
 		    void *(*start_routine)(void *),
 		    void *arg){
     /* block SIGVTALRM signal */
-    sigset_t mask_one;
-    sigemptyset(&mask_one);
-    sigaddset(&mask_one, SIGVTALRM);
-    sigprocmask(SIG_BLOCK, &mask_one, NULL);
+    sigprocmask(SIG_BLOCK, &vtalrm, NULL);
     
     ucontext_t* ucp;
     ucp = (ucontext_t*) malloc(sizeof(ucontext_t)); 
@@ -121,12 +122,10 @@ int gtthread_create(gtthread_t *thread,
     thread->proc = start_routine;
     thread->arg = arg;
 
-    if (getcontext(ucp))
+    if (getcontext(ucp) == -1)
     {
-      // get here from context switch from another thread
-      printf("Warning: control should never reach here.");
-      (*current->proc)(current->arg);
-      gtthread_exit((void*));
+      perror("getcontext");
+      exit(EXIT_FAILURE);
     }
     
     /* allocate stack for the newly created context */
@@ -135,12 +134,13 @@ int gtthread_create(gtthread_t *thread,
     thread->ucp->uc_stack.ss_sp = malloc(SIGSTKSZ);
     thread->ucp->uc_stack.ss_size = SIGSTKSZ;
     thread->ucp->uc_stack.ss_flags = 0;
+    thread->ucp->uc_link = NULL;
 
-    makecontext(ucp, start_routine, 1, arg);
-    enqueue(&ready_queue, thread);
+    makecontext(ucp, gtthread_start, 2, start_routine, arg);
+    steque_enqueue(&ready_queue, thread);
 
     /* unblock the signal */
-    sigprocmask(sig_unblock, &mask_one, null);   
+    sigprocmask(SIG_UNBLOCK, &vtalrm, NULL);   
     return 0; 
 }
 
@@ -157,9 +157,22 @@ int gtthread_join(gtthread_t thread, void **status){
   The gtthread_exit() function is analogous to pthread_exit.
  */
 void gtthread_exit(void* retval){
+    sigprocmask(SIG_BLOCK, &vtalrm, NULL);
 
+    /* cleanup of the current thread */
+    free(current->ucp.uc_stack.ss_sp)
+    free(current->ucp);
+    free(current);
 
+    /* schedule next thread */
+    current = steque_pop(&ready_queue);
+    sigprocmask(SIG_UNBLOCK, &vtalrm, NULL);
 
+    /* if no more thread to run, call exit(0) */
+    if (current)
+        setcontext(current->ucp);
+    else
+      exit(0);
 }
 
 
@@ -170,16 +183,13 @@ void gtthread_exit(void* retval){
  */
 void gtthread_yield(void){
     /* block SIGVTALRM signal */
-    sigset_t mask_one;
-    sigemptyset(&mask_one);
-    sigaddset(&mask_one, SIGVTALRM);
-    sigprocmask(SIG_BLOCK, &mask_one, NULL);
+    sigprocmask(SIG_BLOCK, &vtalrm, NULL);
        
     if (current->next = thread_null)
       return 0;
     
     /* unblock the signal */
-    sigprocmask(sig_unblock, &mask_one, null);    
+    sigprocmask(SIG_UNBLOCK, &vtalrm, null);    
     return 0; 
 }
 
@@ -188,8 +198,7 @@ void gtthread_yield(void){
   returning zero if the threads are the same and non-zero otherwise.
  */
 int  gtthread_equal(gtthread_t t1, gtthread_t t2){
-
-
+    return t1 == t2;
 }
 
 /*
@@ -204,59 +213,56 @@ int  gtthread_cancel(gtthread_t thread){
   Returns calling thread.
  */
 gtthread_t gtthread_self(void){
-
+    return current;
 }
 
 
 /*
- * helper function to install the signal handler 
+ * helper functions to install the signal handler 
  */
-handler_t *Signal(int signum, handler_t *handler)
-{
-    struct sigaction action, old_action;
-    action.sa_handler = handler;
-    sigemptyset(&action.sa_mask); /* block sigs of type being handled */
-    action.sa_flags = SA_RESTART; /* restart syscalls if possible */
 
-    if (sigaction(signum, &action, &old_action) < 0)
-    {
-        printf("unix error.\n");
-        return (old_action.sa_handler);
-    }
+/* 
+ * A wrapper function to start a routine.
+ * The reason we need this is because we need to call gtthread_exit
+ * when the thread finish executing.
+ */
+void gtthread_start(void* (*start_routine)(void*), void* args)
+{
+    /* unblock signal comes from gtthread_create */
+    sigprocmask(SIG_UNBLOCK, &vtalrm, NULL);
+
+    /* start executing the start routine*/
+    void* ret = (*start_routine)(args);
+
+    /* when start_rountine returns, call gtthread_exit*/
+    gtthread_exit(ret);
 }
 
+/*
+ * A signal handler for SIGVTALRM
+ * Comes here when a thread runs up its time slot. This handler implements
+ * a preemptive thread scheduler. It looks at the global ready queue, pop
+ * the thread in the front, save the current thread context and switch context. 
+ */
 void sigvtalrm_handler(int sig)
 {
-    // scheduler should be called here and make context switch   
-    preemptive_scheduler();
-}
+    /* block the signal */
+    sigprocmask(SIG_BLOCK, &vtalrm, NULL);
 
-void preemptive_scheduler()
-{
-    // achieve preemptive scheduling
-    // it looks the threads in ready queue, dequeue a thread and switch context
-    gtthread* thread = dequeue(&ready_queue);
-    swapcontext(current->ucp, thread->ucp);
-    thread->state = EX;
-    enqueue(current); 
-    current = thread;
-    makecontext(current->ucp, current->proc, 1, current->arg);
-}
+    /* get the next runnable thread */
+    gtthread_t* next = steque_pop(&ready_queue)->item;
 
-int alarmOn()
-{
-    /* block SIGVTALRM signal */
-    sigset_t mask_one;
-    sigemptyset(&mask_one);
-    sigaddset(&mask_one, SIGVTALRM);
-    sigprocmask(SIG_BLOCK, &mask_one, NULL); 
-}
+    /* if only 1 thread in the queue, continue execution */
+    if (next == NULL)
+        return;
 
-int alarmOff()
-{
+    gtthread_t* prev = current;
+    steque_enqueue(&ready_queue, current);
+    next->state = GTTHREAD_RUNNING; 
+    current = next;
+
     /* unblock the signal */
-    sigset_t mask_one;
-    sigemptyset(&mask_one);
-    sigaddset(&mask_one, SIGVTALRM);
-    sigprocmask(SIG_UNBLOCK, &mask_one, NULL);  
+    sigprocmask(SIG_UNBLOCK, &vtalrm, NULL); 
+    swapcontext(prev->ucp, current->ucp);
 }
+
