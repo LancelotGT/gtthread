@@ -9,8 +9,22 @@
 #ifndef __GTTHREAD_H
 #define __GTTHREAD_H
 
-#include "steque.h"
 #include <ucontext.h>
+
+/* definition of gtthread */
+typedef struct GTThread_t
+{
+    int tid;
+    int state;
+    void* (*proc)(void*);
+    void* arg;
+    ucontext_t* ucp; 
+} gtthread_t; 
+ 
+typedef struct GTThread_mutext_t
+{
+    int lock;
+} gtthread_mutex_t;
 
 /* Must be called before any of the below functions. Failure to do so may
  * result in undefined behavior. 'period' is the scheduling quantum (interval)

@@ -14,7 +14,7 @@ void *thr1(void *in) {
 int main() {
   gtthread_t t1;
 
-  gtthread_init(0);
+  gtthread_init(10);
   gtthread_create( &t1, thr1, NULL);
 
   gtthread_yield();
