@@ -83,8 +83,12 @@ void gtthread_init(long period){
     timer.it_interval.tv_sec = 0;
     timer.it_value.tv_usec = period;
     timer.it_value.tv_sec = 0; 
-    int rc = setitimer(ITIMER_VIRTUAL, &timer, NULL);
-    printf("Return code of setitimer is %d\n", rc);
+    
+    if (setitimer(ITIMER_VIRTUAL, &timer, NULL) < 0)
+    {
+        perror("setitimer");
+        exit(EXIT_FAILURE);
+    }
 
     /* install signal handler for SIGVTALRM */  
     memset(&act, '\0', sizeof(act));
@@ -94,7 +98,6 @@ void gtthread_init(long period){
       perror ("sigaction");
       exit(EXIT_FAILURE);
     }
-    sleep(2);
 }
 
 
