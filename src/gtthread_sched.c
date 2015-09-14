@@ -10,6 +10,7 @@ gtthreads library.  A simple round-robin queue should be used.
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <signal.h>
 #include <sys/time.h>
 #include <unistd.h>
 #include <string.h>
@@ -71,7 +72,6 @@ void gtthread_init(long period){
     }
 
     current = main_thread;
-    // steque_enqueue(&ready_queue, main_thread); 
     
     /* setting uo the signal mask */
     sigemptyset(&vtalrm);
@@ -79,12 +79,13 @@ void gtthread_init(long period){
     sigprocmask(SIG_UNBLOCK, &vtalrm, NULL); /* in case this is blocked previously */
 
     /* set alarm signal and signal handler */
-    timer.it_interval.tv_usec = 0;
-    timer.it_interval.tv_sec = 0; 
+    timer.it_interval.tv_usec = period;
+    timer.it_interval.tv_sec = 0;
     timer.it_value.tv_usec = period;
-    timer.it_value.tv_usec = 0; 
-    setitimer(ITIMER_VIRTUAL, &timer, NULL);
- 
+    timer.it_value.tv_sec = 0; 
+    int rc = setitimer(ITIMER_VIRTUAL, &timer, NULL);
+    printf("Return code of setitimer is %d\n", rc);
+
     /* install signal handler for SIGVTALRM */  
     memset(&act, '\0', sizeof(act));
     act.sa_handler = &sigvtalrm_handler;
@@ -93,6 +94,7 @@ void gtthread_init(long period){
       perror ("sigaction");
       exit(EXIT_FAILURE);
     }
+    sleep(2);
 }
 
 
@@ -106,8 +108,6 @@ int gtthread_create(gtthread_t *thread,
     /* block SIGVTALRM signal */
     sigprocmask(SIG_BLOCK, &vtalrm, NULL);
     
-   // ucontext_t* ucp;
-   // ucp = (ucontext_t*) malloc(sizeof(ucontext_t)); 
     thread->tid = maxtid++; // need to block signal
     thread->state = GTTHREAD_WAITING;
     thread->proc = start_routine;
@@ -151,12 +151,14 @@ void gtthread_exit(void* retval){
     /* block alarm signal */
     sigprocmask(SIG_BLOCK, &vtalrm, NULL);
 
+    if (steque_isempty(&ready_queue))
+    { 
+        sigprocmask(SIG_UNBLOCK, &vtalrm, NULL); 
+        exit(0);
+    }
+
     gtthread_t* prev = current; 
     gtthread_t* current = (gtthread_t*) steque_pop(&ready_queue);
-    /* if no more thread to run, call exit(0) */ 
-    if (!current)
-        exit(0);  
-
     current->state = GTTHREAD_RUNNING; 
 
     /* free up memory allocated for current thread */
@@ -169,7 +171,6 @@ void gtthread_exit(void* retval){
     setcontext(current->ucp);
 }
 
-
 /*
   The gtthread_yield() function is analogous to pthread_yield, causing
   the calling thread to relinquish the cpu and place itself at the
@@ -179,10 +180,11 @@ int gtthread_yield(void){
     /* block SIGVTALRM signal */
     sigprocmask(SIG_BLOCK, &vtalrm, NULL);
     
-    gtthread_t* next;
-    if ((next = (gtthread_t*) steque_pop(&ready_queue)) == NULL)
-      return 0;
-    
+    /* if no thread to yield, simply return */
+    if (steque_isempty(&ready_queue))
+        return 0;
+
+    gtthread_t* next = (gtthread_t*) steque_pop(&ready_queue);
     gtthread_t* prev = current;
     steque_enqueue(&ready_queue, current);
     current->state = GTTHREAD_WAITING;
@@ -251,12 +253,12 @@ void sigvtalrm_handler(int sig)
     /* block the signal */
     sigprocmask(SIG_BLOCK, &vtalrm, NULL);
 
-    /* get the next runnable thread */
-    gtthread_t* next = (gtthread_t*) steque_pop(&ready_queue);
-
-    /* if only 1 thread in the queue, continue execution */
-    if (next == NULL)
+    /* if no thread in the ready queue, resume execution */
+    if (steque_isempty(&ready_queue))
         return;
+
+    /* get the next runnable thread and use preemptive scheduling */
+    gtthread_t* next = (gtthread_t*) steque_pop(&ready_queue);
 
     gtthread_t* prev = current;
     steque_enqueue(&ready_queue, current);

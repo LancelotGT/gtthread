@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include "gtthread.h"
 
 /* Tests creation.
@@ -14,9 +15,10 @@ void *thr1(void *in) {
 int main() {
   gtthread_t t1;
 
-  gtthread_init(10);
+  gtthread_init(1000);
+  int i = 0;
   gtthread_create( &t1, thr1, NULL);
-
+  while(i++ < 10000000);
   gtthread_yield();
 
   return EXIT_SUCCESS;
