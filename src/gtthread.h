@@ -11,28 +11,20 @@
 
 #include <ucontext.h>
 
-/* definition of gtthread */
-typedef struct GTThread_t
-{
-    int tid;
-    int state;
-    void* (*proc)(void*);
-    void* arg;
-    ucontext_t* ucp; 
-} gtthread_t; 
- 
-typedef struct GTThread_mutext_t
+typedef unsigned long int gtthread_t;
+
+typedef struct gtthread_mutext_t
 {
     int lock;
 } gtthread_mutex_t;
 
-/* Must be called before any of the below functions. Failure to do so may
+/* must be called before any of the below functions. failure to do so may
  * result in undefined behavior. 'period' is the scheduling quantum (interval)
  * in microseconds (i.e., 1/1000000 sec.). */
 void gtthread_init(long period);
 
 /* see man pthread_create(3); the attr parameter is omitted, and this should
- * behave as if attr was NULL (i.e., default attributes) */
+ * behave as if attr was null (i.e., default attributes) */
 int  gtthread_create(gtthread_t *thread,
                      void *(*start_routine)(void *),
                      void *arg);

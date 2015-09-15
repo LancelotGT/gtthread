@@ -20,18 +20,30 @@ gtthreads library.  A simple round-robin queue should be used.
 #define GTTHREAD_RUNNING 0 /* the thread is running */
 #define GTTHREAD_CANCEL 1 /* the thread is cancelled */
 #define GTTHREAD_DONE 2 /* the thread has done */
-#define GTTHREAD_WAITING 3 /* the thread is on the ready queue */
+// #define GTTHREAD_WAITING 3 /* the thread is on the ready queue */
+
+typedef struct Thread_t
+{
+    gtthread_t tid;
+    int state;
+    void* (*proc)(void*);
+    void* arg;
+    void* retval;
+    ucontext_t* ucp; 
+} thread_t;   
 
 /* global data section */
 static steque_t ready_queue;
-static gtthread_t* current;
+static steque_t zombie_queue;
+static thread_t* current;
 static struct itimerval timer;
 static sigset_t vtalrm;
-static int maxtid; 
+static gtthread_t maxtid; 
 
 /* private functions prototypes */
 void sigvtalrm_handler(int sig);
 void gtthread_start(void* (*start_routine)(void*), void* args);
+thread_t* thread_get(gtthread_t tid);
 
 /*
   The gtthread_init() function does not have a corresponding pthread equivalent.
@@ -58,7 +70,8 @@ void gtthread_init(long period){
     steque_init(&ready_queue);
     
     /* create main thread and add it to ready queue */  
-    gtthread_t* main_thread = (gtthread_t*) malloc(sizeof(gtthread_t));
+    /* only main thread is defined on heap and can be freed */
+    thread_t* main_thread = (thread_t*) malloc(sizeof(thread_t));
     main_thread->tid = maxtid++;
     main_thread->ucp = (ucontext_t*) malloc(sizeof(ucontext_t)); 
     main_thread->arg = NULL;
@@ -111,13 +124,15 @@ int gtthread_create(gtthread_t *thread,
     /* block SIGVTALRM signal */
     sigprocmask(SIG_BLOCK, &vtalrm, NULL);
     
-    thread->tid = maxtid++; // need to block signal
-    thread->state = GTTHREAD_WAITING;
-    thread->proc = start_routine;
-    thread->arg = arg;
-    thread->ucp = (ucontext_t*) malloc(sizeof(ucontext_t));
+    /* TODO: allocate heap for thread, it cannot be stored on stack */
+    thread_t* t = (thread_t*) malloc(sizeof(thread_t));
+    *thread = t->tid = maxtid++; // need to block signal
+    t->state = GTTHREAD_RUNNING;
+    t->proc = start_routine;
+    t->arg = arg;
+    t->ucp = (ucontext_t*) malloc(sizeof(ucontext_t));
 
-    if (getcontext(thread->ucp) == -1)
+    if (getcontext(t->ucp) == -1)
     {
       perror("getcontext");
       exit(EXIT_FAILURE);
@@ -126,13 +141,13 @@ int gtthread_create(gtthread_t *thread,
     /* allocate stack for the newly created context */
     /* here we allocate the stack size using the canonical */
     /* size for signal stack. */
-    thread->ucp->uc_stack.ss_sp = malloc(SIGSTKSZ);
-    thread->ucp->uc_stack.ss_size = SIGSTKSZ;
-    thread->ucp->uc_stack.ss_flags = 0;
-    thread->ucp->uc_link = NULL;
+    t->ucp->uc_stack.ss_sp = malloc(SIGSTKSZ);
+    t->ucp->uc_stack.ss_size = SIGSTKSZ;
+    t->ucp->uc_stack.ss_flags = 0;
+    t->ucp->uc_link = NULL;
 
-    makecontext(thread->ucp, (void (*)(void)) gtthread_start, 2, start_routine, arg);
-    steque_enqueue(&ready_queue, thread);
+    makecontext(t->ucp, (void (*)(void)) gtthread_start, 2, start_routine, arg);
+    steque_enqueue(&ready_queue, t);
 
     /* unblock the signal */
     sigprocmask(SIG_UNBLOCK, &vtalrm, NULL);   
@@ -143,8 +158,27 @@ int gtthread_create(gtthread_t *thread,
   The gtthread_join() function is analogous to pthread_join.
   All gtthreads are joinable.
  */
-int gtthread_join(gtthread_t thread, void **status){
-    return 1;
+int gtthread_join(gtthread_t thread, void **status)
+{
+
+    /* if a thread tries to join itself */
+    if (thread == current->tid)
+        return -1;
+
+    thread_t* t;
+    /* if a thread is not created */
+    if ((t = thread_get(thread)) == NULL)
+        return -1;
+
+    /* wait on the thread to terminate */
+    while(t->state == GTTHREAD_RUNNING);
+
+    if (t->state == GTTHREAD_CANCEL)
+        *status = (void*) GTTHREAD_CANCEL;
+    else if (t->state == GTTHREAD_DONE && status)
+        *status = t->retval;
+
+    return 0;
 }
 
 /*
@@ -157,17 +191,21 @@ void gtthread_exit(void* retval){
     if (steque_isempty(&ready_queue))
     { 
         sigprocmask(SIG_UNBLOCK, &vtalrm, NULL); 
-        exit(0);
+        exit((long) retval);
     }
 
-    gtthread_t* prev = current; 
-    gtthread_t* current = (gtthread_t*) steque_pop(&ready_queue);
+    thread_t* prev = current; 
+    thread_t* current = (thread_t*) steque_pop(&ready_queue);
     current->state = GTTHREAD_RUNNING; 
 
     /* free up memory allocated for current thread */
     free(prev->ucp->uc_stack.ss_sp); 
     free(prev->ucp);                
     prev->ucp = NULL;
+
+    /* mark the exit thread as DONE and add to zombie_queue */ 
+    current->state = GTTHREAD_DONE; 
+    steque_enqueue(&zombie_queue, prev);
 
     /* unblock alarm signal and setcontext for next thread */
     sigprocmask(SIG_UNBLOCK, &vtalrm, NULL); 
@@ -187,11 +225,11 @@ int gtthread_yield(void){
     if (steque_isempty(&ready_queue))
         return 0;
 
-    gtthread_t* next = (gtthread_t*) steque_pop(&ready_queue);
-    gtthread_t* prev = current;
+    thread_t* next = (thread_t*) steque_pop(&ready_queue);
+    thread_t* prev = current;
     steque_enqueue(&ready_queue, current);
-    current->state = GTTHREAD_WAITING;
-    next->state = GTTHREAD_RUNNING; 
+    //current->state = GTTHREAD_WAITING;
+    //next->state = GTTHREAD_RUNNING; 
     current = next;
 
     /* unblock the signal */
@@ -205,7 +243,7 @@ int gtthread_yield(void){
   returning zero if the threads are the same and non-zero otherwise.
  */
 int  gtthread_equal(gtthread_t t1, gtthread_t t2){
-    return t1.tid == t2.tid;
+    return t1 == t2;
 }
 
 /*
@@ -213,6 +251,20 @@ int  gtthread_equal(gtthread_t t1, gtthread_t t2){
   allowing one thread to terminate another asynchronously.
  */
 int  gtthread_cancel(gtthread_t thread){
+    /* if a thread cancel itself */
+    if (gtthread_equal(current->tid, thread))
+        gtthread_exit(0);
+
+    thread_t* t = thread_get(thread);
+    if (t == NULL)
+        return -1;
+
+    if (t->state == GTTHREAD_DONE)
+        return -1;
+    else
+        t->state = GTTHREAD_CANCEL;
+    free(t->ucp->uc_stack.ss_sp);
+    free(t->ucp);
     return 0;
 }
 
@@ -220,7 +272,7 @@ int  gtthread_cancel(gtthread_t thread){
   Returns calling thread.
  */
 gtthread_t gtthread_self(void){
-    return *current;
+    return current->tid;
 }
 
 
@@ -239,10 +291,13 @@ void gtthread_start(void* (*start_routine)(void*), void* args)
     sigprocmask(SIG_UNBLOCK, &vtalrm, NULL);
 
     /* start executing the start routine*/
-    void* ret = (*start_routine)(args);
+    current->retval = (*start_routine)(args);
 
     /* when start_rountine returns, call gtthread_exit*/
-    gtthread_exit(ret);
+    gtthread_exit(current->retval);
+
+    /* when start_rountine returns, marks it as DONE and add to zombie_queue */
+    /* the thread can explictly call gtthread_exit to quit and wait to be joined */
 }
 
 /*
@@ -261,9 +316,9 @@ void sigvtalrm_handler(int sig)
         return;
 
     /* get the next runnable thread and use preemptive scheduling */
-    gtthread_t* next = (gtthread_t*) steque_pop(&ready_queue);
+    thread_t* next = (thread_t*) steque_pop(&ready_queue);
 
-    gtthread_t* prev = current;
+    thread_t* prev = current;
     steque_enqueue(&ready_queue, current);
     next->state = GTTHREAD_RUNNING; 
     current = next;
@@ -273,3 +328,29 @@ void sigvtalrm_handler(int sig)
     swapcontext(prev->ucp, current->ucp);
 }
 
+/*
+ * Given a thread ID, search the thread in ready_queue and zombie queue 
+ * This helper method is useful when we try to determine whether the thread
+ * user wants to join is created before. 
+ */
+thread_t* thread_get(gtthread_t tid)
+{
+    steque_node_t* current = ready_queue.front;   
+    while (current != NULL)
+    {
+        thread_t* t= (thread_t*) current->item;
+        if (t->tid == tid)
+            return t;
+        current = current->next;
+    }
+
+    current = zombie_queue.front;
+    while (current != NULL)
+    {
+        thread_t* t= (thread_t*) current->item;
+        if (t->tid == tid)
+            return t;
+        current = current->next;
+    } 
+    return (thread_t*) NULL;
+}
