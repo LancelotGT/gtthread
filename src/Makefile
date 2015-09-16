@@ -1,25 +1,46 @@
 CC = gcc            # default is CC = cc
 CFLAGS = -g -Wall   # default is CFLAGS = [blank]
-
+AR = ar -cvq
+PROJ_DIR = ..
+INC_DIR = $(PROJ_DIR)/include
+LIB_DIR = $(PROJ_DIR)/lib
+TEST_DIR = $(PROJ_DIR)/test
 GTTHREADS_SRC = gtthread_sched.c gtthread_mutex.c steque.c
 GTTHREADS_OBJ = $(patsubst %.c,%.o,$(GTTHREADS_SRC))
+MAIN = gtthread_main
+HEADER = gtthread.h steque.h
 
 # pattern rule for object files
 %.o: %.c
 	$(CC) -c $(CFLAGS) $< -o $@
 
-#### Producer-Consumer ####
-# producer_consumer: producer_consumer.o steque.o
-# 	$(CC) -o producer_consumer producer_consumer.o steque.o -lpthread
+all: $(MAIN)
 
-#### Dining ####
-# dining_main: dining_main.o
-# 	$(CC) -o dining_main dining_main.o -lpthread
-
-#### GTThreads ####
-gtthread_main: gtthread_main.o $(GTTHREADS_OBJ)
+$(MAIN): $(MAIN).o $(GTTHREADS_OBJ)
 	$(CC) -o gtthread_main gtthread_main.o $(GTTHREADS_OBJ)
 
+copy:
+	cp -f $(HEADER) $(INC_DIR)  
+
+run:$(MAIN)
+	./$(MAIN)
+
+test1: $(GTTHREADS_OBJ)
+	$(CC) -o $(TEST_DIR)/test1/main $(CFLAGS) -I$(INC_DIR) $(GTTHREADS_OBJ) $(TEST_DIR)/test1/main.c 
+	./$(TEST_DIR)/test1/main 
+
+test2: $(GTTHREADS_OBJ)
+	$(CC) -o $(TEST_DIR)/test2/main $(CFLAGS) -I$(INC_DIR) $(GTTHREADS_OBJ) $(TEST_DIR)/test2/main.c 
+	./$(TEST_DIR)/test2/main  
+
+test3: $(GTTHREADS_OBJ)
+	$(CC) -o $(TEST_DIR)/test3/main $(CFLAGS) -I$(INC_DIR) $(GTTHREADS_OBJ) $(TEST_DIR)/test3/main.c 
+	./$(TEST_DIR)/test3/main   
+
+test4: $(GTTHREADS_OBJ)
+	$(CC) -o $(TEST_DIR)/test4/main $(CFLAGS) -I$(INC_DIR) $(GTTHREADS_OBJ) $(TEST_DIR)/test4/main.c 
+	./$(TEST_DIR)/test4/main    
+
+	./$(TEST_DIR)/test2/main  
 clean:
-	$(RM) -f *.o gtthread_main
-# $(RM) -f *.o producer_consumer dining_main gtthread_main 
+	$(RM) -f *.o $(LIB_DIR)/* $(GTTHREAD_OBJ)

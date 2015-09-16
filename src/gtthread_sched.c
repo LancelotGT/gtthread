@@ -61,8 +61,8 @@ thread_t* thread_get(gtthread_t tid);
   instruction. You can find details on this difference in the man page
   for pthread_create.
  */
-void gtthread_init(long period){
-
+void gtthread_init(long period)
+{
     struct sigaction act;
 
     /* initializing data structures */
@@ -120,12 +120,13 @@ void gtthread_init(long period){
  */
 int gtthread_create(gtthread_t *thread,
 		    void *(*start_routine)(void *),
-		    void *arg){
+		    void *arg)
+{
     /* block SIGVTALRM signal */
     sigprocmask(SIG_BLOCK, &vtalrm, NULL);
     
-    /* TODO: allocate heap for thread, it cannot be stored on stack */
-    thread_t* t = (thread_t*) malloc(sizeof(thread_t));
+    /* allocate heap for thread, it cannot be stored on stack */
+    thread_t* t = malloc(sizeof(thread_t));
     *thread = t->tid = maxtid++; // need to block signal
     t->state = GTTHREAD_RUNNING;
     t->proc = start_routine;
@@ -160,7 +161,6 @@ int gtthread_create(gtthread_t *thread,
  */
 int gtthread_join(gtthread_t thread, void **status)
 {
-
     /* if a thread tries to join itself */
     if (thread == current->tid)
         return -1;
@@ -184,7 +184,8 @@ int gtthread_join(gtthread_t thread, void **status)
 /*
   The gtthread_exit() function is analogous to pthread_exit.
  */
-void gtthread_exit(void* retval){
+void gtthread_exit(void* retval)
+{
     /* block alarm signal */
     sigprocmask(SIG_BLOCK, &vtalrm, NULL);
 
@@ -194,17 +195,22 @@ void gtthread_exit(void* retval){
         exit((long) retval);
     }
 
+    /* if the main thread call gtthread_exit */
+    if (current->tid == 0)
+      exit((long) retval);
+
     thread_t* prev = current; 
-    thread_t* current = (thread_t*) steque_pop(&ready_queue);
+    current = (thread_t*) steque_pop(&ready_queue);
     current->state = GTTHREAD_RUNNING; 
 
-    /* free up memory allocated for current thread */
+    /* free up memory allocated for exit thread */
     free(prev->ucp->uc_stack.ss_sp); 
     free(prev->ucp);                
     prev->ucp = NULL;
 
     /* mark the exit thread as DONE and add to zombie_queue */ 
-    current->state = GTTHREAD_DONE; 
+    prev->state = GTTHREAD_DONE; 
+    prev->retval = retval;
     steque_enqueue(&zombie_queue, prev);
 
     /* unblock alarm signal and setcontext for next thread */
@@ -217,7 +223,8 @@ void gtthread_exit(void* retval){
   the calling thread to relinquish the cpu and place itself at the
   back of the schedule queue.
  */
-int gtthread_yield(void){
+int gtthread_yield(void)
+{
     /* block SIGVTALRM signal */
     sigprocmask(SIG_BLOCK, &vtalrm, NULL);
     
@@ -228,8 +235,6 @@ int gtthread_yield(void){
     thread_t* next = (thread_t*) steque_pop(&ready_queue);
     thread_t* prev = current;
     steque_enqueue(&ready_queue, current);
-    //current->state = GTTHREAD_WAITING;
-    //next->state = GTTHREAD_RUNNING; 
     current = next;
 
     /* unblock the signal */
@@ -242,7 +247,8 @@ int gtthread_yield(void){
   The gtthread_yield() function is analogous to pthread_equal,
   returning zero if the threads are the same and non-zero otherwise.
  */
-int  gtthread_equal(gtthread_t t1, gtthread_t t2){
+int  gtthread_equal(gtthread_t t1, gtthread_t t2)
+{
     return t1 == t2;
 }
 
@@ -250,7 +256,8 @@ int  gtthread_equal(gtthread_t t1, gtthread_t t2){
   The gtthread_cancel() function is analogous to pthread_cancel,
   allowing one thread to terminate another asynchronously.
  */
-int  gtthread_cancel(gtthread_t thread){
+int gtthread_cancel(gtthread_t thread)
+{
     /* if a thread cancel itself */
     if (gtthread_equal(current->tid, thread))
         gtthread_exit(0);
@@ -258,20 +265,25 @@ int  gtthread_cancel(gtthread_t thread){
     thread_t* t = thread_get(thread);
     if (t == NULL)
         return -1;
-
     if (t->state == GTTHREAD_DONE)
+        return -1;
+    if (t->state == GTTHREAD_CANCEL)
         return -1;
     else
         t->state = GTTHREAD_CANCEL;
+
     free(t->ucp->uc_stack.ss_sp);
     free(t->ucp);
+    t->ucp = NULL;
+    steque_enqueue(&zombie_queue, t);
     return 0;
 }
 
 /*
   Returns calling thread.
  */
-gtthread_t gtthread_self(void){
+gtthread_t gtthread_self(void)
+{
     return current->tid;
 }
 
@@ -295,9 +307,6 @@ void gtthread_start(void* (*start_routine)(void*), void* args)
 
     /* when start_rountine returns, call gtthread_exit*/
     gtthread_exit(current->retval);
-
-    /* when start_rountine returns, marks it as DONE and add to zombie_queue */
-    /* the thread can explictly call gtthread_exit to quit and wait to be joined */
 }
 
 /*
@@ -352,5 +361,5 @@ thread_t* thread_get(gtthread_t tid)
             return t;
         current = current->next;
     } 
-    return (thread_t*) NULL;
+    return NULL;
 }
