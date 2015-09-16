@@ -171,11 +171,14 @@ int gtthread_join(gtthread_t thread, void **status)
         return -1;
 
     /* wait on the thread to terminate */
-    while(t->state == GTTHREAD_RUNNING);
+    while (t->state == GTTHREAD_RUNNING);
+
+    if (status == NULL)
+        return 0;
 
     if (t->state == GTTHREAD_CANCEL)
         *status = (void*) GTTHREAD_CANCEL;
-    else if (t->state == GTTHREAD_DONE && status)
+    else if (t->state == GTTHREAD_DONE)
         *status = t->retval;
 
     return 0;

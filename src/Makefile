@@ -41,6 +41,29 @@ test4: $(GTTHREADS_OBJ)
 	$(CC) -o $(TEST_DIR)/test4/main $(CFLAGS) -I$(INC_DIR) $(GTTHREADS_OBJ) $(TEST_DIR)/test4/main.c 
 	./$(TEST_DIR)/test4/main    
 
-	./$(TEST_DIR)/test2/main  
+test5: $(GTTHREADS_OBJ)
+	$(CC) -o $(TEST_DIR)/test5/main $(CFLAGS) -I$(INC_DIR) $(GTTHREADS_OBJ) $(TEST_DIR)/test5/main.c 
+	./$(TEST_DIR)/test5/main     
+
+test6: $(GTTHREADS_OBJ)
+	$(CC) -o $(TEST_DIR)/test6/main $(CFLAGS) -I$(INC_DIR) $(GTTHREADS_OBJ) $(TEST_DIR)/test6/main.c 
+	./$(TEST_DIR)/test6/main      
+
+test7: $(GTTHREADS_OBJ)
+	$(CC) -o $(TEST_DIR)/test7/main $(CFLAGS) -I$(INC_DIR) $(GTTHREADS_OBJ) $(TEST_DIR)/test7/main.c 
+	./$(TEST_DIR)/test7/main       
+
+test8: $(GTTHREADS_OBJ)
+	$(CC) -o $(TEST_DIR)/test8/main $(CFLAGS) -I$(INC_DIR) $(GTTHREADS_OBJ) $(TEST_DIR)/test8/main.c 
+	./$(TEST_DIR)/test8/main        
+
+test9: $(GTTHREADS_OBJ)
+	$(CC) -o $(TEST_DIR)/test9/main $(CFLAGS) -I$(INC_DIR) $(GTTHREADS_OBJ) $(TEST_DIR)/test9/main.c 
+	./$(TEST_DIR)/test9/main         
+
+test10: $(GTTHREADS_OBJ)
+	$(CC) -o $(TEST_DIR)/test10/main $(CFLAGS) -I$(INC_DIR) $(GTTHREADS_OBJ) $(TEST_DIR)/test10/main.c 
+	./$(TEST_DIR)/test10/main          
+
 clean:
 	$(RM) -f *.o $(LIB_DIR)/* $(GTTHREAD_OBJ)
