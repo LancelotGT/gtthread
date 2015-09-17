@@ -37,7 +37,7 @@ static steque_t ready_queue;
 static steque_t zombie_queue;
 static thread_t* current;
 static struct itimerval timer;
-static sigset_t vtalrm;
+sigset_t vtalrm;
 static gtthread_t maxtid; 
 
 /* private functions prototypes */

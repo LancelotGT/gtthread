@@ -13,9 +13,10 @@
 
 typedef unsigned long int gtthread_t;
 
-typedef struct gtthread_mutext_t
+typedef struct gtthread_mutex_t
 {
     int lock;
+    gtthread_t tid;
 } gtthread_mutex_t;
 
 /* must be called before any of the below functions. failure to do so may
