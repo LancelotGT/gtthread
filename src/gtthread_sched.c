@@ -265,13 +265,23 @@ int gtthread_cancel(gtthread_t thread)
     if (gtthread_equal(current->tid, thread))
         gtthread_exit(0);
 
+    sigprocmask(SIG_BLOCK, &vtalrm, NULL);
     thread_t* t = thread_get(thread);
     if (t == NULL)
+    {
+        sigprocmask(SIG_UNBLOCK, &vtalrm, NULL);    
         return -1;
+    }
     if (t->state == GTTHREAD_DONE)
+    {
+        sigprocmask(SIG_UNBLOCK, &vtalrm, NULL); 
         return -1;
+    }
     if (t->state == GTTHREAD_CANCEL)
+    {
+        sigprocmask(SIG_UNBLOCK, &vtalrm, NULL);  
         return -1;
+    }
     else
         t->state = GTTHREAD_CANCEL;
 
@@ -279,6 +289,7 @@ int gtthread_cancel(gtthread_t thread)
     free(t->ucp);
     t->ucp = NULL;
     steque_enqueue(&zombie_queue, t);
+    sigprocmask(SIG_UNBLOCK, &vtalrm, NULL);
     return 0;
 }
 
@@ -329,7 +340,11 @@ void sigvtalrm_handler(int sig)
 
     /* get the next runnable thread and use preemptive scheduling */
     thread_t* next = (thread_t*) steque_pop(&ready_queue);
-
+    while (next->state == GTTHREAD_CANCEL)
+    {
+        steque_enqueue(&zombie_queue, next);
+        next = (thread_t*) steque_pop(&ready_queue); 
+    }
     thread_t* prev = current;
     steque_enqueue(&ready_queue, current);
     next->state = GTTHREAD_RUNNING; 
