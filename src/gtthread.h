@@ -10,6 +10,7 @@
 #define __GTTHREAD_H
 
 #include <ucontext.h>
+#include "steque.h"
 
 typedef unsigned long int gtthread_t;
 

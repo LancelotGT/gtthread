@@ -20,7 +20,6 @@ gtthreads library.  A simple round-robin queue should be used.
 #define GTTHREAD_RUNNING 0 /* the thread is running */
 #define GTTHREAD_CANCEL 1 /* the thread is cancelled */
 #define GTTHREAD_DONE 2 /* the thread has done */
-// #define GTTHREAD_WAITING 3 /* the thread is on the ready queue */
 
 typedef struct Thread_t
 {
@@ -171,7 +170,12 @@ int gtthread_join(gtthread_t thread, void **status)
         return -1;
 
     /* wait on the thread to terminate */
-    while (t->state == GTTHREAD_RUNNING);
+    while (t->state == GTTHREAD_RUNNING)
+    {
+        sigprocmask(SIG_UNBLOCK, &vtalrm, NULL);
+        sigvtalrm_handler(SIGVTALRM);
+        sigprocmask(SIG_BLOCK, &vtalrm, NULL);
+    }
 
     if (status == NULL)
         return 0;
@@ -200,7 +204,16 @@ void gtthread_exit(void* retval)
 
     /* if the main thread call gtthread_exit */
     if (current->tid == 0)
-      exit((long) retval);
+    {
+        while (!steque_isempty(&ready_queue))
+        {
+            sigprocmask(SIG_UNBLOCK, &vtalrm, NULL);  
+            sigvtalrm_handler(SIGVTALRM);
+            sigprocmask(SIG_BLOCK, &vtalrm, NULL);
+        }
+        sigprocmask(SIG_UNBLOCK, &vtalrm, NULL);   
+        exit((long) retval);
+    }
 
     thread_t* prev = current; 
     current = (thread_t*) steque_pop(&ready_queue);
