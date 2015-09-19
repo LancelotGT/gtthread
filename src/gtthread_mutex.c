@@ -50,7 +50,7 @@ int gtthread_mutex_lock(gtthread_mutex_t* mutex){
     {
         sigprocmask(SIG_UNBLOCK, &vtalrm, NULL); 
         /* the alarm signal should be delivered here */
-        /* will jump to the signal handler if having a queuing signal */
+        sigvtalrm_handler(SIGVTALRM);
         sigprocmask(SIG_BLOCK, &vtalrm, NULL);
     }
     mutex->lock = LOCK;
