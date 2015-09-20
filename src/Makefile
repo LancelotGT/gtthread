@@ -65,7 +65,11 @@ test10: $(GTTHREADS_OBJ)
 	$(CC) -o $(TEST_DIR)/test10/main -I$(INC_DIR) $(GTTHREADS_OBJ) $(TEST_DIR)/test10/main.c 
 	./$(TEST_DIR)/test10/main          
 
-testall: test1 test2 test3 test4 test5 test6 test7 test8 test9
+test11: $(GTTHREADS_OBJ)
+	$(CC) -o $(TEST_DIR)/test11/main -I$(INC_DIR) $(GTTHREADS_OBJ) $(TEST_DIR)/test11/main.c 
+	./$(TEST_DIR)/test11/main           
+	
+testall: test1 test2 test3 test4 test5 test6 test7 test8 test9 test10 test11
 
 clean:
 	$(RM) -f *.o $(LIB_DIR)/* $(GTTHREAD_OBJ)
