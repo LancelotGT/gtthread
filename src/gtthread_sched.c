@@ -301,7 +301,6 @@ int gtthread_cancel(gtthread_t thread)
     free(t->ucp->uc_stack.ss_sp);
     free(t->ucp);
     t->ucp = NULL;
-    steque_enqueue(&zombie_queue, t);
     sigprocmask(SIG_UNBLOCK, &vtalrm, NULL);
     return 0;
 }
