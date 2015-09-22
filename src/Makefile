@@ -1,23 +1,28 @@
 CC = gcc            # default is CC = cc
 CFLAGS = -g -Wall   # default is CFLAGS = [blank]
 AR = ar -cvq
+RANLIB = ranlib
 PROJ_DIR = ..
 INC_DIR = $(PROJ_DIR)/include
 LIB_DIR = $(PROJ_DIR)/lib
 TEST_DIR = $(PROJ_DIR)/test
 GTTHREADS_SRC = gtthread_sched.c gtthread_mutex.c steque.c
 GTTHREADS_OBJ = $(patsubst %.c,%.o,$(GTTHREADS_SRC))
-MAIN = gtthread_main
 HEADER = gtthread.h steque.h
+LIBRARY = libgtthread.a
 
 # pattern rule for object files
 %.o: %.c
 	$(CC) -c $(CFLAGS) $< -o $@
 
-all: $(MAIN)
+all: $(GTTHREADS_OBJ) library
 
-$(MAIN): $(MAIN).o $(GTTHREADS_OBJ)
-	$(CC) -o gtthread_main gtthread_main.o $(GTTHREADS_OBJ)
+main: $(MAIN).o $(GTTHREADS_OBJ)
+	$(CC) -o gtthread_main gtthread_main.o -L$(LIB_DIR) -lgtthread
+
+library: $(GTTHREADS_OBJ)
+	$(AR) $(LIB_DIR)/$(LIBRARY) $(GTTHREADS_OBJ)
+	$(RANLIB) $(LIB_DIR)/$(LIBRARY)
 
 copy:
 	cp -f $(HEADER) $(INC_DIR)  

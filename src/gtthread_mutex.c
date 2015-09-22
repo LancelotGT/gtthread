@@ -44,6 +44,7 @@ int gtthread_mutex_lock(gtthread_mutex_t* mutex){
     {
         steque_enqueue(mutex, (steque_item) gtthread_self());  
         sigprocmask(SIG_UNBLOCK, &vtalrm, NULL);   
+        return 0;
     }
 
     /* if a thread try to do recursive lock */ 
@@ -58,7 +59,9 @@ int gtthread_mutex_lock(gtthread_mutex_t* mutex){
     {
         sigprocmask(SIG_UNBLOCK, &vtalrm, NULL); 
         /* the alarm signal should be delivered here */
-        //sigvtalrm_handler(SIGVTALRM);
+        // sigvtalrm_handler(SIGVTALRM);
+        int i = 0;
+        while (i++ < 10000);
         sigprocmask(SIG_BLOCK, &vtalrm, NULL);
     }
     sigprocmask(SIG_UNBLOCK, &vtalrm, NULL);  
