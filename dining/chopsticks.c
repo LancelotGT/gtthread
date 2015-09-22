@@ -35,15 +35,19 @@ void pickup_chopsticks(int phil_id){
     int right_chopstick = phil_id;
     if (left_chopstick < right_chopstick)
     {
+        printf("Philosopher #%d tries to acquire left chopstick.\n", phil_id); 
         pthread_mutex_lock(&chopsticks[left_chopstick]);
         pickup_left_chopstick(phil_id);
+        printf("Philosopher #%d tries to acquire right chopstick.\n", phil_id);  
         pthread_mutex_lock(&chopsticks[right_chopstick]);
         pickup_right_chopstick(phil_id);
     }
     else
     {
+        printf("Philosopher #%d tries to acquire right chopstick.\n", phil_id);   
         pthread_mutex_lock(&chopsticks[right_chopstick]);
         pickup_right_chopstick(phil_id);
+        printf("Philosopher #%d tries to acquire left chopstick.\n", phil_id);  
         pthread_mutex_lock(&chopsticks[left_chopstick]);
         pickup_left_chopstick(phil_id); 
     }
@@ -58,6 +62,8 @@ void putdown_chopsticks(int phil_id){
     int right_chopstick = phil_id; 
     putdown_left_chopstick(phil_id);
     pthread_mutex_unlock(&chopsticks[left_chopstick]); 
+    printf("Philosopher #%d releases left chopstick.\n", phil_id);    
     putdown_right_chopstick(phil_id);
     pthread_mutex_unlock(&chopsticks[right_chopstick]);  
+    printf("Philosopher #%d releases right chopstick.\n", phil_id);
 }
