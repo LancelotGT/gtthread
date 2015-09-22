@@ -1,0 +1,33 @@
+# What Linux platform do I use.           
+I am using ubuntu/trusty64 (Official Ubuntu Server 14.04 LTS builds) created by vagrant.
+
+# How the preemptive scheduler is implemented.
+* The context switch is implemented using two things. One is the SIGVTALRM alarm signal. Every thread has some time do its work. Once the time is used up, an alarm signal will be delivered and switch to another thread. The other thing is the user level thread switching is done by syscalls like setcontext, getcontext, swapcontext and makecontext.
+ 
+* getcontext is used whenever a new thread is created. We use getcontext to save the stack frame, register values and program counter associated with the current thread. Then we use makecontext to associate the thread with their start_routine.
+
+* swapcontext is used in context switching. It saves the context for current thread and swtich to and run the start_routine of the next thread. setcontext is only used when a thread has exited or is terminated. In this case, we do not need to save the current context.
+
+# How to compile the library and run my program
+To compile, run
+```
+mkdir include && mkdir lib
+cd src && make
+```
+It will simply put the header files (gtthread.h steque.h) into include folder and library file (libgtthread.a) into lib folder. 
+
+# How I prevent deadlocks in my dining philosopher solution.
+I use a simple strategy to prevent deadlocks. Every philosopher has a index and every chopstick also has an index. For instance, the index of left chopstick is (phil_id + 4) % 5, and the index of the right chopstick is phil_id. We can just let every philosopher pick up the chopstick with the smaller index. In this way, the deadlock situation where every philopher picks up the chopstick on the side will never happends, since a guy will not pick any chopstick in this case.
+
+# Thoughts on the project
+* In order to get the return value of a thread's start_routine, I use a wrapper function. The wrapper function will call the start_routine provided by the user, get back the return value and call pthread_exit with that return value.
+
+* Another issue we have is that to distinguish between joining a cancelled thread and joining a thread that is never created. In order to do this, I use a zombie_queue to keep track of all the threads that have terminated.
+ 
+# Things that work well
+* The *context syscall works pretty well in this project and it definitely saves a lot of time since we do not need manually link the new thread to their corresponding start_routine.
+
+* The queue based lock works better than spin lock. I try both methods. The spin lock does not provide fairness between thread. Hence if I use gtthread for dining philophoser problem, a large amount of meals will be eaten by 1 philosopher. On the hand, queue lock improve this situation a lot, even though it is not as good as pthread library.
+
+# Things that don't work well
+* I first developed this project on my local OSX machine. But it will not work because the *context syscalls are deprecated on OSX yosemite. So I switch to Ubuntu 64 bit OS.
