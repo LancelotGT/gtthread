@@ -8,7 +8,7 @@ typedef struct steque_node_t{
   struct steque_node_t* next;
 } steque_node_t;
 
-typedef struct{
+typedef struct {
   steque_node_t* front;
   steque_node_t* back;
   int N;

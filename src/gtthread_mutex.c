@@ -13,8 +13,6 @@ gtthreads library.  The locks can be implemented with a simple queue.
 #include <stdlib.h>
 #include <unistd.h>
 #include "gtthread.h"
-#define LOCK 1
-#define UNLOCK 0
 
 extern sigset_t vtalrm;
 
@@ -47,21 +45,19 @@ int gtthread_mutex_lock(gtthread_mutex_t* mutex){
         return 0;
     }
 
-    /* if a thread try to do recursive lock */ 
+    /* if a thread try to acquire lock */ 
     if (gtthread_self() == (gtthread_t) steque_front(mutex))
     {
         sigprocmask(SIG_UNBLOCK, &vtalrm, NULL);
-        return -1;
+        return 0;
     }
 
     steque_enqueue(mutex, (steque_item) gtthread_self()); 
     while (gtthread_self() != (gtthread_t) steque_front(mutex)) 
     {
         sigprocmask(SIG_UNBLOCK, &vtalrm, NULL); 
-        /* the alarm signal should be delivered here */
-        // sigvtalrm_handler(SIGVTALRM);
-        int i = 0;
-        while (i++ < 10000);
+        /* actively perform context switching */
+        sigvtalrm_handler(SIGVTALRM);
         sigprocmask(SIG_BLOCK, &vtalrm, NULL);
     }
     sigprocmask(SIG_UNBLOCK, &vtalrm, NULL);  

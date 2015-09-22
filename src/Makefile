@@ -17,18 +17,13 @@ LIBRARY = libgtthread.a
 
 all: $(GTTHREADS_OBJ) library
 
-main: $(MAIN).o $(GTTHREADS_OBJ)
-	$(CC) -o gtthread_main gtthread_main.o -L$(LIB_DIR) -lgtthread
-
 library: $(GTTHREADS_OBJ)
 	$(AR) $(LIB_DIR)/$(LIBRARY) $(GTTHREADS_OBJ)
 	$(RANLIB) $(LIB_DIR)/$(LIBRARY)
+	cp -f $(HEADER) $(INC_DIR)   
 
 copy:
 	cp -f $(HEADER) $(INC_DIR)  
-
-run:$(MAIN)
-	./$(MAIN)
 
 test1: $(GTTHREADS_OBJ)
 	$(CC) -o $(TEST_DIR)/test1/main -I$(INC_DIR) $(GTTHREADS_OBJ) $(TEST_DIR)/test1/main.c 
