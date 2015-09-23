@@ -24,6 +24,7 @@ gtthreads library.  A simple round-robin queue should be used.
 typedef struct Thread_t
 {
     gtthread_t tid;
+    gtthread_t joining;
     int state;
     void* (*proc)(void*);
     void* arg;
@@ -65,7 +66,7 @@ void gtthread_init(long period)
     struct sigaction act;
 
     /* initializing data structures */
-    maxtid = 0;
+    maxtid = 1;
     steque_init(&ready_queue);
     
     /* create main thread and add it to ready queue */  
@@ -75,6 +76,7 @@ void gtthread_init(long period)
     main_thread->ucp = (ucontext_t*) malloc(sizeof(ucontext_t)); 
     main_thread->arg = NULL;
     main_thread->state = GTTHREAD_RUNNING;
+    main_thread->joining = 0;
 
     /* must be called before makecontext */
     if (getcontext(main_thread->ucp) == -1)
@@ -131,6 +133,7 @@ int gtthread_create(gtthread_t *thread,
     t->proc = start_routine;
     t->arg = arg;
     t->ucp = (ucontext_t*) malloc(sizeof(ucontext_t));
+    t->joining = 0;
 
     if (getcontext(t->ucp) == -1)
     {
@@ -169,6 +172,11 @@ int gtthread_join(gtthread_t thread, void **status)
     if ((t = thread_get(thread)) == NULL)
         return -1;
 
+    /* check if that thread is joining on me */
+    if (t->joining == current->tid)
+        return -1;
+
+    current->joining = t->tid;
     /* wait on the thread to terminate */
     while (t->state == GTTHREAD_RUNNING)
     {
@@ -203,7 +211,7 @@ void gtthread_exit(void* retval)
     }
 
     /* if the main thread call gtthread_exit */
-    if (current->tid == 0)
+    if (current->tid == 1)
     {
         while (!steque_isempty(&ready_queue))
         {
@@ -227,6 +235,7 @@ void gtthread_exit(void* retval)
     /* mark the exit thread as DONE and add to zombie_queue */ 
     prev->state = GTTHREAD_DONE; 
     prev->retval = retval;
+    prev->joining = 0;
     steque_enqueue(&zombie_queue, prev);
 
     /* unblock alarm signal and setcontext for next thread */
@@ -301,6 +310,8 @@ int gtthread_cancel(gtthread_t thread)
     free(t->ucp->uc_stack.ss_sp);
     free(t->ucp);
     t->ucp = NULL;
+    t->joining = 0;
+    steque_enqueue(&zombie_queue, t);
     sigprocmask(SIG_UNBLOCK, &vtalrm, NULL);
     return 0;
 }

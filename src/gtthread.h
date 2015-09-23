@@ -58,4 +58,6 @@ int  gtthread_mutex_lock(gtthread_mutex_t *mutex);
 int  gtthread_mutex_unlock(gtthread_mutex_t *mutex);
 int gtthread_mutex_destroy(gtthread_mutex_t *mutex);
 
+/* signal handler used both by sched and mutex */
+void sigvtalrm_handler(int sig); 
 #endif // __GTTHREAD_H
