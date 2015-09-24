@@ -74,6 +74,7 @@ void gtthread_init(long period)
     thread_t* main_thread = (thread_t*) malloc(sizeof(thread_t));
     main_thread->tid = maxtid++;
     main_thread->ucp = (ucontext_t*) malloc(sizeof(ucontext_t)); 
+    memset(main_thread->ucp, '\0', sizeof(ucontext_t));
     main_thread->arg = NULL;
     main_thread->state = GTTHREAD_RUNNING;
     main_thread->joining = 0;
@@ -134,6 +135,7 @@ int gtthread_create(gtthread_t *thread,
     t->arg = arg;
     t->ucp = (ucontext_t*) malloc(sizeof(ucontext_t));
     t->joining = 0;
+    memset(t->ucp, '\0', sizeof(ucontext_t));
 
     if (getcontext(t->ucp) == -1)
     {
